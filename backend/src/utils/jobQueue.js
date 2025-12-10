@@ -1,0 +1,1 @@
+// Placeholder BullMQ job queue using ioredis\nconst { Queue } = require('bullmq');\nconst redisClient = require('./redisClient');\n\n// Example queue for PDF generation jobs\nconst pdfQueue = new Queue('pdfQueue', {\n  connection: redisClient\n});\n\nmodule.exports = { pdfQueue };
