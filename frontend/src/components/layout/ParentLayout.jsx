@@ -1,25 +1,31 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     LayoutDashboard,
     Users,
     Wallet,
     Calendar,
-    MessageSquare,
     Settings,
     LogOut,
     Search,
     Bell,
     Menu,
-    School
+    School,
+    X
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../lib/api';
 
 const ParentLayout = ({ children }) => {
     const location = useLocation();
-    const { logout } = useAuth(); // Assuming useAuth is available
-    const [sidebarOpen, setSidebarOpen] = React.useState(false);
+    const { user, logout } = useAuth();
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [notifications, setNotifications] = useState([]);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [loadingNotifications, setLoadingNotifications] = useState(false);
+    const notificationRef = useRef(null);
 
     const isActive = (path) => {
         return location.pathname === path;
@@ -32,6 +38,55 @@ const ParentLayout = ({ children }) => {
         { icon: Calendar, label: 'Calendar', path: '/parent/calendar' },
         { icon: Settings, label: 'Settings', path: '/parent/settings' },
     ];
+
+    // Fetch notifications
+    useEffect(() => {
+        const fetchNotifications = async () => {
+            if (!user) return;
+            setLoadingNotifications(true);
+            try {
+                const { data } = await api.get('/notifications/my');
+                if (data.success) {
+                    setNotifications(data.data);
+                }
+            } catch (error) {
+                // Only log non-401 errors (401 is expected when not authenticated)
+                if (error.response?.status !== 401) {
+                    console.error('Failed to fetch notifications:', error);
+                }
+            } finally {
+                setLoadingNotifications(false);
+            }
+        };
+
+        fetchNotifications();
+    }, [user]);
+
+    // Close notification dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+                setShowNotifications(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Mark notification as read
+    const markAsRead = async (notificationId) => {
+        try {
+            await api.patch(`/notifications/${notificationId}/read`);
+            setNotifications(prev =>
+                prev.map(n => n._id === notificationId ? { ...n, read: true } : n)
+            );
+        } catch (error) {
+            console.error('Failed to mark notification as read:', error);
+        }
+    };
+
+    const unreadCount = notifications.filter(n => !n.read).length;
 
     return (
         <div className="relative flex min-h-screen w-full bg-background-light dark:bg-background-dark font-display overflow-x-hidden">
@@ -104,16 +159,96 @@ const ParentLayout = ({ children }) => {
                                 <input
                                     className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden text-text-primary-light dark:text-text-primary-dark focus:outline-0 focus:ring-0 border-none bg-background-light dark:bg-background-dark h-full placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark pl-2 text-base font-normal leading-normal"
                                     placeholder="Search..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
                                 />
+                                {searchQuery && (
+                                    <button
+                                        onClick={() => setSearchQuery('')}
+                                        className="px-2 text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                )}
                             </div>
                         </label>
-                        <button className="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 w-10 bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark hover:bg-border-light dark:hover:bg-border-dark transition-colors">
-                            <Bell size={20} />
-                        </button>
+
+                        {/* Notification Dropdown */}
+                        <div className="relative" ref={notificationRef}>
+                            <button
+                                onClick={() => setShowNotifications(!showNotifications)}
+                                className="relative flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 w-10 bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark hover:bg-border-light dark:hover:bg-border-dark transition-colors"
+                            >
+                                <Bell size={20} />
+                                {unreadCount > 0 && (
+                                    <span className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                    </span>
+                                )}
+                            </button>
+
+                            {/* Notification Dropdown Menu */}
+                            {showNotifications && (
+                                <div className="absolute right-0 mt-2 w-80 bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark rounded-lg shadow-lg overflow-hidden z-50">
+                                    <div className="p-4 border-b border-border-light dark:border-border-dark">
+                                        <h3 className="text-text-primary-light dark:text-text-primary-dark font-semibold">Notifications</h3>
+                                    </div>
+                                    <div className="max-h-96 overflow-y-auto">
+                                        {loadingNotifications ? (
+                                            <div className="p-4 text-center text-text-secondary-light dark:text-text-secondary-dark">
+                                                Loading...
+                                            </div>
+                                        ) : notifications.length === 0 ? (
+                                            <div className="p-4 text-center text-text-secondary-light dark:text-text-secondary-dark">
+                                                No notifications
+                                            </div>
+                                        ) : (
+                                            notifications.map((notification) => (
+                                                <div
+                                                    key={notification._id}
+                                                    onClick={() => !notification.read && markAsRead(notification._id)}
+                                                    className={cn(
+                                                        "p-4 border-b border-border-light dark:border-border-dark cursor-pointer hover:bg-background-light dark:hover:bg-background-dark transition-colors",
+                                                        !notification.read && "bg-primary/5"
+                                                    )}
+                                                >
+                                                    <div className="flex items-start gap-3">
+                                                        <div className="flex-1">
+                                                            <h4 className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark">
+                                                                {notification.title}
+                                                            </h4>
+                                                            <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
+                                                                {notification.message}
+                                                            </p>
+                                                            <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1">
+                                                                {new Date(notification.createdAt).toLocaleDateString()}
+                                                            </p>
+                                                        </div>
+                                                        {!notification.read && (
+                                                            <div className="w-2 h-2 bg-primary rounded-full mt-1"></div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="flex items-center gap-3 pl-2 border-l border-border-light dark:border-border-dark">
-                            <div className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 bg-gray-200 ring-2 ring-primary/20" style={{ backgroundImage: 'url("https://ui-avatars.com/api/?name=John+Doe&background=4A90E2&color=fff")' }}></div>
+                            <div
+                                className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 bg-gray-200 ring-2 ring-primary/20"
+                                style={{
+                                    backgroundImage: user?.profileImageUrl
+                                        ? `url(${user.profileImageUrl})`
+                                        : `url("https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=4A90E2&color=fff")`
+                                }}
+                            ></div>
                             <div className="hidden lg:flex flex-col text-right">
-                                <h1 className="text-text-primary-light dark:text-text-primary-dark text-sm font-medium">Mr. John Doe</h1>
+                                <h1 className="text-text-primary-light dark:text-text-primary-dark text-sm font-medium">
+                                    {user?.name || 'Parent'}
+                                </h1>
                                 <p className="text-text-secondary-light dark:text-text-secondary-dark text-xs">Parent</p>
                             </div>
                         </div>

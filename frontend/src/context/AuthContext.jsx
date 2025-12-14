@@ -10,24 +10,28 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const checkAuth = async () => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            try {
+                const { data } = await api.get('/auth/me');
+                if (data.success) {
+                    setUser(data.data);
+                }
+            } catch (err) {
+                // Only log non-401 errors (401 is expected when token is invalid/expired)
+                if (err.response?.status !== 401) {
+                    console.error('Auth check failed', err);
+                }
+                localStorage.removeItem('token');
+                setUser(null);
+            }
+        }
+        setLoading(false);
+    };
+
     // Initialize auth state
     useEffect(() => {
-        const checkAuth = async () => {
-            const token = localStorage.getItem('token');
-            if (token) {
-                try {
-                    const { data } = await api.get('/auth/me');
-                    if (data.success) {
-                        setUser(data.data);
-                    }
-                } catch (err) {
-                    console.error('Auth check failed', err);
-                    localStorage.removeItem('token');
-                    setUser(null);
-                }
-            }
-            setLoading(false);
-        };
         checkAuth();
     }, []);
 
@@ -39,10 +43,12 @@ export const AuthProvider = ({ children }) => {
             if (data.success) {
                 localStorage.setItem('token', data.accessToken);
                 setUser(data.user);
+                setError(null);
                 return data.user;
             }
         } catch (err) {
-            setError(err.response?.data?.error || 'Login failed');
+            const message = err.response?.data?.error?.message || err.response?.data?.message || 'Login failed';
+            setError(message);
             throw err;
         } finally {
             setLoading(false);
@@ -56,7 +62,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading, error }}>
+        <AuthContext.Provider value={{ user, login, logout, loading, error, checkAuth }}>
             {!loading && children}
         </AuthContext.Provider>
     );

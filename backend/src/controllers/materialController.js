@@ -43,3 +43,15 @@ exports.getMaterials = asyncHandler(async (req, res) => {
 
     res.status(200).json({ success: true, data: materials });
 });
+
+// @desc    Get materials uploaded by current user
+// @route   GET /api/materials/my
+// @access  Private
+exports.getMyMaterials = asyncHandler(async (req, res) => {
+    const materials = await Material.find({ uploadedBy: req.user.id })
+        .populate('classId', 'name grade section')
+        .populate('subjectId', 'name')
+        .sort('-createdAt');
+
+    res.status(200).json({ success: true, count: materials.length, data: materials });
+});

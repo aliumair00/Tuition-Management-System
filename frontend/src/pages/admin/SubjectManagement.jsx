@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, PlusCircle, Trash2, Edit, BookOpen, User } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, PlusCircle, Trash2, Edit, BookOpen, User, ChevronDown, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import api from '../../lib/api';
 
@@ -23,6 +23,31 @@ const SubjectManagement = () => {
         code: '',
         assignedTeacherId: ''
     });
+    const [teacherDropdownOpen, setTeacherDropdownOpen] = useState(false);
+    const [teacherQuery, setTeacherQuery] = useState('');
+    const dropdownRef = useRef(null);
+    const triggerRef = useRef(null);
+
+    useEffect(() => {
+        const onDocMouseDown = (e) => {
+            if (!teacherDropdownOpen) return;
+            const dropdownEl = dropdownRef.current;
+            const triggerEl = triggerRef.current;
+            if (!dropdownEl || !triggerEl) return;
+            const target = e.target;
+            if (dropdownEl.contains(target) || triggerEl.contains(target)) return;
+            setTeacherDropdownOpen(false);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') setTeacherDropdownOpen(false);
+        };
+        document.addEventListener('mousedown', onDocMouseDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDocMouseDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [teacherDropdownOpen]);
 
     const fetchSubjects = async () => {
         setLoading(true);
@@ -69,6 +94,7 @@ const SubjectManagement = () => {
 
             await api.post('/subjects', formData);
             alert("Subject added successfully!");
+            setTeacherDropdownOpen(false);
             setViewMode('list');
             setFormData({ name: '', code: '', assignedTeacherId: '' });
         } catch (error) {
@@ -76,6 +102,21 @@ const SubjectManagement = () => {
             alert("Failed to add subject. Ensure code is unique.");
         }
     };
+
+    const handleCancel = () => {
+        setTeacherDropdownOpen(false);
+        setTeacherQuery('');
+        setViewMode('list');
+    };
+
+    const filteredTeachers = teachers.filter(t => {
+        const q = teacherQuery.trim().toLowerCase();
+        if (!q) return true;
+        return (
+            (t.name || '').toLowerCase().includes(q) ||
+            (t.email || '').toLowerCase().includes(q)
+        );
+    });
 
     const handleDelete = async (id) => {
         if (window.confirm("Are you sure you want to delete this subject?")) {
@@ -97,7 +138,7 @@ const SubjectManagement = () => {
                         <p className="text-sm text-gray-500 dark:text-gray-400">Create a new subject curriculum.</p>
                     </div>
                     <div className="flex gap-3">
-                        <button onClick={() => setViewMode('list')} className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white text-sm font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
+                        <button onClick={handleCancel} className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white text-sm font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
                         <button onClick={handleSubmit} className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary-dark transition-colors shadow-sm">Save Subject</button>
                     </div>
                 </div>
@@ -118,18 +159,84 @@ const SubjectManagement = () => {
                         <label className="space-y-2">
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Assign Teacher (Optional)</span>
                             <div className="relative">
-                                <select
-                                    name="assignedTeacherId"
-                                    value={formData.assignedTeacherId}
-                                    onChange={handleInputChange}
-                                    className="w-full h-12 px-4 pl-11 rounded-lg bg-background-light dark:bg-gray-900 border border-border-light dark:border-gray-700 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all appearance-none"
+                                <button
+                                    type="button"
+                                    ref={triggerRef}
+                                    onClick={() => setTeacherDropdownOpen(v => !v)}
+                                    className="w-full h-12 px-4 pl-11 pr-10 rounded-lg bg-background-light dark:bg-gray-900 border border-border-light dark:border-gray-700 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all flex items-center justify-between"
                                 >
-                                    <option value="">Select a teacher</option>
-                                    {teachers.map(t => (
-                                        <option key={t._id} value={t._id}>{t.name} ({t.email})</option>
-                                    ))}
-                                </select>
-                                <User className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 pointer-events-none" />
+                                    <span className="truncate text-left">
+                                        {formData.assignedTeacherId
+                                            ? (() => {
+                                                const sel = teachers.find(t => t._id === formData.assignedTeacherId);
+                                                return sel ? `${sel.name} (${sel.email})` : 'Select a teacher';
+                                            })()
+                                            : 'Select a teacher'}
+                                    </span>
+                                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                                    <User className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 pointer-events-none" />
+                                </button>
+                                {teacherDropdownOpen && (
+                                    <>
+                                    <div className="fixed inset-0 z-20" onClick={() => setTeacherDropdownOpen(false)} />
+                                    <div ref={dropdownRef} className="absolute z-30 mt-2 w-full rounded-xl border border-border-light dark:border-gray-700 bg-card-light dark:bg-card-dark shadow-lg overflow-hidden">
+                                        <div className="p-2 border-b border-border-light dark:border-gray-800">
+                                            <div className="relative">
+                                                <input
+                                                    value={teacherQuery}
+                                                    onChange={(e) => setTeacherQuery(e.target.value)}
+                                                    placeholder="Search teacher by name or email"
+                                                    className="w-full h-10 px-3 pl-9 rounded-md bg-background-light dark:bg-gray-900 border border-border-light dark:border-gray-700 focus:ring-2 focus:ring-primary focus:border-primary outline-none text-sm"
+                                                />
+                                                <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" />
+                                            </div>
+                                        </div>
+                                        <div className="max-h-56 overflow-auto">
+                                            {filteredTeachers.length === 0 ? (
+                                                <div className="p-3 text-sm text-gray-500 dark:text-gray-400">No matches</div>
+                                            ) : (
+                                                filteredTeachers.map(t => (
+                                                    <button
+                                                        key={t._id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData(prev => ({ ...prev, assignedTeacherId: t._id }));
+                                                            setTeacherDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${formData.assignedTeacherId === t._id ? 'bg-primary/10' : ''}`}
+                                                    >
+                                                        <User className="w-4 h-4 text-primary" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{t.name}</div>
+                                                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{t.email}</div>
+                                                        </div>
+                                                        {formData.assignedTeacherId === t._id && <Check className="w-4 h-4 text-primary" />}
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                        <div className="p-2 border-t border-border-light dark:border-gray-800 flex justify-between">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setFormData(prev => ({ ...prev, assignedTeacherId: '' }));
+                                                    setTeacherDropdownOpen(false);
+                                                }}
+                                                className="text-xs px-3 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                                            >
+                                                Clear
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setTeacherDropdownOpen(false)}
+                                                className="text-xs px-3 py-1 rounded-md bg-primary text-white hover:bg-primary/90"
+                                            >
+                                                Done
+                                            </button>
+                                        </div>
+                                    </div>
+                                    </>
+                                )}
                             </div>
                         </label>
                     </div>

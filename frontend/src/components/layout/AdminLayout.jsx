@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../lib/api';
 import {
     LayoutDashboard,
     GraduationCap,
@@ -16,59 +17,32 @@ import {
     UserCircle,
     School,
     Calendar,
-    Filter,
-    X
+    Filter
 } from 'lucide-react';
-import api from '../../lib/api';
-
-// Helper for relative time
-const getRelativeTime = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now - date) / 1000);
-
-    if (seconds < 60) return `${seconds}s ago`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}d ago`;
-    return new Date(dateString).toLocaleDateString();
-};
 
 const AdminLayout = ({ children }) => {
     const location = useLocation();
     const navigate = useNavigate();
     const { user, logout } = useAuth();
-    const [search, setSearch] = React.useState('');
     const [isSidebarOpen, setSidebarOpen] = React.useState(false);
     const [showNotifications, setShowNotifications] = React.useState(false);
     const [notifications, setNotifications] = React.useState([]);
+    const [loadingNotifications, setLoadingNotifications] = React.useState(false);
 
-    // Redirect if not authenticated
-    React.useEffect(() => {
-        if (!user) {
-            navigate('/login');
-        }
-    }, [user, navigate]);
-
-    React.useEffect(() => {
-        const fetchNotifications = async () => {
-            if (user?._id || user?.id) {
-                try {
-                    const userId = user._id || user.id;
-                    const { data } = await api.get(`/notifications/user/${userId}`);
-                    if (data.success) {
-                        setNotifications(data.data);
-                    }
-                } catch (error) {
-                    console.error("Failed to fetch notifications", error);
-                }
+    const toggleNotifications = async () => {
+        const next = !showNotifications;
+        setShowNotifications(next);
+        if (next && user?.id && notifications.length === 0) {
+            setLoadingNotifications(true);
+            try {
+                const { data } = await api.get(`/notifications/user/${user.id}`);
+                if (data.success) setNotifications(data.data);
+            } catch (e) {
+            } finally {
+                setLoadingNotifications(false);
             }
-        };
-        fetchNotifications();
-    }, [user]);
+        }
+    };
 
     const navItems = [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/admin/dashboard' },
@@ -141,13 +115,13 @@ const AdminLayout = ({ children }) => {
 
                 <div className="p-4 border-t border-border-light dark:border-border-dark">
                     <div className="flex items-center gap-3 p-3 rounded-lg mb-2">
-                        <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 bg-cover bg-center" style={{ backgroundImage: user?.profileImageUrl ? `url("${user.profileImageUrl}")` : 'url("https://i.pravatar.cc/150?u=admin")' }} />
+                        <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 bg-cover bg-center" style={{ backgroundImage: `url("${user?.profileImageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'Admin')}&background=random`}")` }} />
                         <div className="overflow-hidden">
-                            <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{user?.name || 'Admin User'}</h4>
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{user?.name || 'Admin'}</h4>
                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.role || 'Administrator'}</p>
                         </div>
                     </div>
-                    <button onClick={() => { logout(); }} className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/10 hover:text-red-600 dark:hover:text-red-400 transition-colors font-medium text-sm">
+                    <button onClick={() => { logout(); navigate('/login'); }} className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/10 hover:text-red-600 dark:hover:text-red-400 transition-colors font-medium text-sm">
                         <LogOut className="w-5 h-5" />
                         Log out
                     </button>
@@ -174,57 +148,32 @@ const AdminLayout = ({ children }) => {
                                 type="search"
                                 placeholder="Search..."
                                 className="w-full h-10 pl-10 pr-4 rounded-full bg-background-light dark:bg-gray-800 border-transparent text-sm focus:ring-2 focus:ring-primary focus:border-transparent placeholder-gray-500"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') { navigate(`/admin/students?q=${encodeURIComponent(search)}`); } }}
                             />
                         </div>
 
                         <div className="relative">
-                            <button
-                                onClick={() => setShowNotifications(!showNotifications)}
-                                className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors"
-                            >
+                            <button onClick={toggleNotifications} className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors">
                                 <Bell className="w-6 h-6" />
-                                {notifications.length > 0 && (
-                                    <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500 border-2 border-card-light dark:border-card-dark" />
-                                )}
+                                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500 border-2 border-card-light dark:border-card-dark" />
                             </button>
-
-                            {/* Notification Dropdown */}
                             {showNotifications && (
-                                <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
-                                    <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-card-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark z-50 overflow-hidden">
-                                        <div className="p-4 border-b border-border-light dark:border-border-dark flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
-                                            <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
-                                            <button onClick={() => setShowNotifications(false)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                                                <X size={16} />
-                                            </button>
-                                        </div>
-                                        <div className="max-h-[400px] overflow-y-auto">
-                                            {notifications.length === 0 ? (
-                                                <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                                                    No new notifications
+                                <div className="absolute right-0 mt-2 w-80 rounded-xl border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark shadow-lg z-40">
+                                    <div className="p-3 border-b border-border-light dark:border-border-dark text-sm font-semibold text-gray-700 dark:text-gray-300">Notifications</div>
+                                    <div className="max-h-80 overflow-auto">
+                                        {loadingNotifications ? (
+                                            <div className="p-4 text-sm text-gray-500 dark:text-gray-400">Loading...</div>
+                                        ) : notifications.length === 0 ? (
+                                            <div className="p-4 text-sm text-gray-500 dark:text-gray-400">No notifications</div>
+                                        ) : (
+                                            notifications.map(n => (
+                                                <div key={n._id} className="p-4 border-b border-border-light dark:border-border-dark">
+                                                    <div className="text-sm font-semibold text-gray-900 dark:text-white">{n.title}</div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400">{n.message}</div>
                                                 </div>
-                                            ) : (
-                                                <div className="divide-y divide-border-light dark:divide-border-dark">
-                                                    {notifications.map((n) => (
-                                                        <div key={n._id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">
-                                                            <div className="text-sm font-medium text-gray-900 dark:text-white mb-1">{n.title}</div>
-                                                            <div className="text-xs text-gray-500 dark:text-gray-400">{getRelativeTime(n.createdAt)}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="p-3 border-t border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 text-center">
-                                            <button onClick={() => { navigate('/admin/dashboard?section=notifications'); setShowNotifications(false); }} className="text-xs font-semibold text-primary hover:underline">
-                                                View All Notifications
-                                            </button>
-                                        </div>
+                                            ))
+                                        )}
                                     </div>
-                                </>
+                                </div>
                             )}
                         </div>
                     </div>

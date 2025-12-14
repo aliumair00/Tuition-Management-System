@@ -19,16 +19,15 @@ const TeacherAttendance = () => {
     const [classes, setClasses] = useState([]);
     const [selectedClassId, setSelectedClassId] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [students, setStudents] = useState([]); // List of { studentId, name, status }
+    const [students, setStudents] = useState([]); // List of { studentId, name, status, note }
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [error, setError] = useState(null);
 
     // Fetch classes on mount
     useEffect(() => {
         const fetchClasses = async () => {
             try {
-                // If user is admin, fetch all. If teacher, fetch assigned.
-                // Assuming /api/classes/my works for teachers, or generic /api/classes for all if admin
                 const endpoint = user.role === 'Admin' ? '/classes' : '/classes/my';
                 const { data } = await api.get(endpoint);
                 if (data.success) {
@@ -39,6 +38,7 @@ const TeacherAttendance = () => {
                 }
             } catch (error) {
                 console.error("Failed to fetch classes", error);
+                setError("Failed to load classes.");
             }
         };
         fetchClasses();
@@ -50,54 +50,60 @@ const TeacherAttendance = () => {
 
         const fetchData = async () => {
             setLoading(true);
+            setError(null);
             try {
                 // 1. Try to get existing attendance
                 const { data: attendanceData } = await api.get(`/attendance/class/${selectedClassId}?date=${date}`);
 
                 if (attendanceData.success && attendanceData.data.length > 0) {
-                    // Start with the existing record (assuming first one is relevant if multiple, logic says unique per class/date)
                     const record = attendanceData.data[0];
                     if (record) {
-                        // Map existing records
                         const mappedStudents = record.records.map(r => ({
                             studentId: r.studentId._id,
                             name: r.studentId.name,
-                            status: r.status, // Present/Absent/Late
-                            note: r.note
+                            status: r.status,
+                            note: r.note || ''
                         }));
                         setStudents(mappedStudents);
+                        return; // Done
                     }
+                }
+
+                // 2. If no attendance, we need the roster.
+                // We shouldn't rely on 'classes' list having full student objects populated deeply if the list is huge.
+                // Safer to fetch the specific class details again or check if we already have it.
+                // The /classes/my endpoint usually populates students.
+                const currentClass = classes.find(c => c._id === selectedClassId);
+
+                if (currentClass && currentClass.students && currentClass.students.length > 0) {
+                    const roster = currentClass.students.map(s => ({
+                        studentId: s._id,
+                        name: s.name,
+                        status: 'Present', // Default to Present for new day
+                        note: ''
+                    }));
+                    setStudents(roster);
                 } else {
-                    // 2. If no attendance, fetch fresh roster from Class details
-                    // The classes list might already have students populated? Yes from previous step.
-                    // But let's fetch individual class to be safe and get specific student list if needed
-                    // Actually, if 'classes' state already has students populated (from getMyClasses), we can use that.
-                    // Let's check if the selected class in 'classes' array has students.
-                    const cls = classes.find(c => c._id === selectedClassId);
-                    if (cls && cls.students) {
-                        const roster = cls.students.map(s => ({
+                    // Fallback check: fetch class details explicitly in case list didn't populate
+                    const { data: classDetail } = await api.get(`/classes/${selectedClassId}`);
+                    if (classDetail.success && classDetail.data.students.length > 0) {
+                        const roster = classDetail.data.students.map(s => ({
                             studentId: s._id,
                             name: s.name,
-                            status: 'Present', // Default
+                            status: 'Present',
                             note: ''
                         }));
                         setStudents(roster);
                     } else {
-                        // Only if not populated, fetch class details
-                        const { data: classDetail } = await api.get(`/classes/${selectedClassId}`);
-                        if (classDetail.success) {
-                            const roster = classDetail.data.students.map(s => ({
-                                studentId: s._id,
-                                name: s.name,
-                                status: 'Present',
-                                note: ''
-                            }));
-                            setStudents(roster);
-                        }
+                        setStudents([]); // No students found
                     }
                 }
+
             } catch (error) {
                 console.error("Failed to fetch data", error);
+                // Don't show error if it's just 404 for attendance, but here we handled success check.
+                // If API fails completely:
+                setError("Failed to load attendance data.");
             } finally {
                 setLoading(false);
             }
@@ -132,6 +138,7 @@ const TeacherAttendance = () => {
 
             await api.post('/attendance', payload);
             alert("Attendance saved successfully!");
+            // Optionally refetch or just stay as is
         } catch (error) {
             console.error("Failed to save attendance", error);
             alert("Failed to save attendance.");
@@ -162,27 +169,28 @@ const TeacherAttendance = () => {
                         <select
                             value={selectedClassId}
                             onChange={(e) => setSelectedClassId(e.target.value)}
-                            className="bg-background-light dark:bg-background-dark border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5"
+                            className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5"
                         >
                             {classes.length === 0 && <option value="">Loading classes...</option>}
                             {classes.map(c => (
                                 <option key={c._id} value={c._id}>{c.name} ({c.grade}-{c.section})</option>
                             ))}
                         </select>
+                        {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+                        {classes.length === 0 && !error && <p className="text-xs text-gray-400 mt-1">Found 0 classes.</p>}
                     </div>
                     <div className="flex flex-col gap-2">
                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Date</label>
                         <input
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            className="bg-background-light dark:bg-background-dark border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5"
+                            className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5"
                             type="date"
                         />
                     </div>
-                    <button onClick={() => { }} className="w-full md:w-auto bg-primary text-white font-medium py-2.5 px-5 rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 shadow-sm pointer-events-none opacity-80">
-                        {/* Placeholder or Refresh button */}
-                        <PersonStanding className="w-5 h-5" />
-                        <span>Roster Loaded</span>
+                    <button className="w-full md:w-auto bg-primary/10 text-primary font-medium py-2.5 px-5 rounded-lg flex items-center justify-center gap-2 shadow-sm pointer-events-none opacity-80 border border-primary/20">
+                        <Clock className="w-5 h-5" />
+                        <span>{new Date(date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
                     </button>
                 </div>
             </motion.div>
@@ -193,13 +201,15 @@ const TeacherAttendance = () => {
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
                             <h2 className="text-xl font-bold text-[#111318] dark:text-white">
-                                Student Roster: {classes.find(c => c._id === selectedClassId)?.name || 'Select Class'}
+                                Student Roster
                             </h2>
-                            <p className="text-[#616f89] dark:text-gray-400">{date}</p>
+                            <p className="text-[#616f89] dark:text-gray-400 text-sm mt-1">
+                                {classes.find(c => c._id === selectedClassId)?.name || 'Select Class'} • {students.length} Students
+                            </p>
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={() => handleMarkAll('Present')} className="py-2 px-4 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300">Mark All Present</button>
-                            <button onClick={saveAttendance} disabled={saving} className="py-2 px-4 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-70">
+                            <button onClick={saveAttendance} disabled={saving || students.length === 0} className="py-2 px-4 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
                                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                 {saving ? "Saving..." : "Save Attendance"}
                             </button>
@@ -209,16 +219,17 @@ const TeacherAttendance = () => {
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                        <thead className="text-xs text-gray-700 dark:text-gray-400 uppercase bg-gray-50 dark:bg-background-dark/50">
+                        <thead className="text-xs text-gray-700 dark:text-gray-400 uppercase bg-gray-50 dark:bg-gray-800/50">
                             <tr>
-                                <th className="px-6 py-3" scope="col">Roll No.</th>
+                                <th className="px-6 py-3" scope="col">#</th>
                                 <th className="px-6 py-3" scope="col">Student Name</th>
                                 <th className="px-6 py-3 text-center" scope="col">Status</th>
+                                <th className="px-6 py-3 text-center" scope="col">Note</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan="3" className="p-4 text-center">Loading roster...</td></tr>
+                                <tr><td colSpan="4" className="p-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /><p className="mt-2 text-gray-500">Loading roster...</p></td></tr>
                             ) : students.length > 0 ? (
                                 students.map((student, idx) => (
                                     <tr key={student.studentId} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
@@ -237,10 +248,24 @@ const TeacherAttendance = () => {
                                                 </button>
                                             </div>
                                         </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <input
+                                                type="text"
+                                                placeholder="Note..."
+                                                className="bg-transparent border-b border-gray-200 dark:border-gray-700 focus:border-primary outline-none text-xs w-full max-w-[100px]"
+                                                value={student.note || ''}
+                                                onChange={(e) => setStudents(prev => prev.map(s => s.studentId === student.studentId ? { ...s, note: e.target.value } : s))}
+                                            />
+                                        </td>
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan="3" className="p-4 text-center">No students found in this class.</td></tr>
+                                <tr>
+                                    <td colSpan="4" className="p-8 text-center text-gray-500">
+                                        <p>No students found in this class.</p>
+                                        <p className="text-xs mt-1">Contact admin if this is unexpected.</p>
+                                    </td>
+                                </tr>
                             )}
                         </tbody>
                     </table>

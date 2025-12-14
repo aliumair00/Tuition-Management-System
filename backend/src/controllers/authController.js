@@ -1,6 +1,5 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const { sendEmailNotification } = require('../services/emailService');
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -8,12 +7,6 @@ const { sendEmailNotification } = require('../services/emailService');
 exports.register = async (req, res, next) => {
     try {
         const { name, email, password, role } = req.body;
-        const normalizeRole = (r) => ({
-            student: 'Student',
-            teacher: 'Teacher',
-            parent: 'Parent',
-            admin: 'Admin'
-        }[String(r || 'Student').toLowerCase()] || 'Student');
 
         // Create user
         // Note: For production, you might want to restrict role creation (e.g., only Admin can create Admin/Teacher)
@@ -21,7 +14,7 @@ exports.register = async (req, res, next) => {
             name,
             email,
             password,
-            role: normalizeRole(role)
+            role
         });
 
         sendTokenResponse(user, 201, res);
@@ -45,8 +38,13 @@ exports.login = async (req, res, next) => {
         // Check for user
         const user = await User.findOne({ email }).select('+password');
 
-        if (!user || !(await user.matchPassword(password))) {
-            return res.status(401).json({ success: false, error: { message: 'Invalid credentials' } });
+        if (!user) {
+            return res.status(401).json({ success: false, error: { message: 'Account with this email does not exist' } });
+        }
+
+        const isMatch = await user.matchPassword(password);
+        if (!isMatch) {
+            return res.status(401).json({ success: false, error: { message: 'Incorrect password' } });
         }
 
         if (!user.active) {
@@ -78,7 +76,11 @@ exports.getMe = async (req, res, next) => {
 const sendTokenResponse = (user, statusCode, res) => {
     // Create token
     const token = user.getSignedJwtToken();
-    const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_REFRESH_SECRET, { expiresIn: '30d' });
+    const refreshToken = jwt.sign(
+        { id: user._id },
+        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+        { expiresIn: '30d' }
+    );
 
     const options = {
         expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
@@ -106,72 +108,92 @@ const sendTokenResponse = (user, statusCode, res) => {
         });
 };
 
-// @desc    Forgot password
+// @desc    Initiate forgot password flow
 // @route   POST /api/auth/forgot
 // @access  Public
 exports.forgotPassword = async (req, res, next) => {
     try {
-        const { email } = req.body;
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(404).json({ success: false, error: { message: 'No user with that email' } });
-        }
-
-        // Get reset token
-        const resetToken = user.getResetPasswordToken();
-        await user.save({ validateBeforeSave: false });
-
-        // Create reset URL (frontend will handle)
-        const resetUrl = `${req.protocol}://${req.get('host')}/api/auth/reset/${resetToken}`;
-
-        const message = `You are receiving this email because you (or someone else) has requested the reset of a password. Please make a PUT request to: ${resetUrl}`;
-
-        try {
-            await sendEmailNotification(user._id, 'Password Reset Request', message);
-            res.status(200).json({ success: true, data: 'Email sent' });
-        } catch (err) {
-            // Clean up token fields
-            user.resetPasswordToken = undefined;
-            user.resetPasswordExpire = undefined;
-            await user.save({ validateBeforeSave: false });
-            return res.status(500).json({ success: false, error: { message: 'Email could not be sent' } });
-        }
+        return res.status(501).json({ success: false, error: { message: 'Not implemented' } });
     } catch (err) {
         next(err);
     }
 };
 
-// @desc    Reset password
+// @desc    Reset password with token
 // @route   PUT /api/auth/reset/:resetToken
 // @access  Public
 exports.resetPassword = async (req, res, next) => {
     try {
-        const { resetToken } = req.params;
-        const { password } = req.body;
-
-        // Hash token
-        const crypto = require('crypto');
-        const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-
-        // Find user by token and ensure token not expired
-        const user = await User.findOne({
-            resetPasswordToken: hashedToken,
-            resetPasswordExpire: { $gt: Date.now() },
-        });
-
-        if (!user) {
-            return res.status(400).json({ success: false, error: { message: 'Invalid or expired token' } });
-        }
-
-        // Set new password
-        user.password = password;
-        user.resetPasswordToken = undefined;
-        user.resetPasswordExpire = undefined;
-        await user.save();
-
-        sendTokenResponse(user, 200, res);
+        return res.status(501).json({ success: false, error: { message: 'Not implemented' } });
     } catch (err) {
         next(err);
     }
 };
 
+// @desc    Update user details
+// @route   PUT /api/auth/updatedetails
+// @access  Private
+exports.updateDetails = async (req, res, next) => {
+    try {
+        const fieldsToUpdate = {
+            name: req.body.name,
+            email: req.body.email,
+            phone: req.body.phone,
+            address: req.body.address,
+            emergencyContact: req.body.emergencyContact,
+            notificationPreferences: req.body.notificationPreferences,
+            profileImageUrl: req.body.profileImageUrl
+        };
+
+        const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
+            new: true,
+            runValidators: true
+        });
+
+        res.status(200).json({
+            success: true,
+            data: user
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// @desc    Update password
+// @route   PUT /api/auth/updatepassword
+// @access  Private
+exports.updatePassword = async (req, res, next) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                error: { message: 'Please provide current and new password' }
+            });
+        }
+
+        // Get user with password field
+        const user = await User.findById(req.user.id).select('+password');
+
+        // Check current password
+        const isMatch = await user.matchPassword(currentPassword);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                error: { message: 'Current password is incorrect' }
+            });
+        }
+
+        // Update password
+        user.password = newPassword;
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            data: { message: 'Password updated successfully' }
+        });
+    } catch (err) {
+        next(err);
+    }
+};

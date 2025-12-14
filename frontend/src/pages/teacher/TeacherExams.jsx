@@ -19,6 +19,7 @@ const TeacherExams = () => {
     const [viewMode, setViewMode] = useState('list'); // 'list', 'create', 'grade'
     const [exams, setExams] = useState([]);
     const [classes, setClasses] = useState([]); // For dropdowns
+    const [subjects, setSubjects] = useState([]); // For subject dropdown
     const [selectedExam, setSelectedExam] = useState(null);
     const [students, setStudents] = useState([]); // Roster for grading
     const [loading, setLoading] = useState(false);
@@ -30,12 +31,14 @@ const TeacherExams = () => {
         subjectId: '',
         date: '',
         duration: 60,
-        totalMarks: 100
+        totalMarks: 100,
+        paperFile: null
     });
 
     useEffect(() => {
         fetchExams();
         fetchClasses();
+        fetchSubjects();
     }, []);
 
     const fetchExams = async () => {
@@ -58,19 +61,40 @@ const TeacherExams = () => {
         } catch (error) { console.error(error); }
     };
 
+    const fetchSubjects = async () => {
+        try {
+            const { data } = await api.get('/subjects');
+            if (data.success) setSubjects(data.data);
+        } catch (error) { console.error('Failed to fetch subjects', error); }
+    };
+
     const handleCreateSubmit = async (e) => {
         e.preventDefault();
         try {
-            // Need to verify subjectId belongs to class but for simplicity just send
-            // wait, we need to populate subjects for the chosen class to let user select
-            // For now assuming class object has subjectIds populated
-
-            await api.post('/exams', {
-                ...formData,
-                questions: [] // Simplified: no questions, just marks
-            });
+            // Prepare payload, handling optional file upload
+            if (formData.paperFile) {
+                const payload = new FormData();
+                payload.append('title', formData.title);
+                payload.append('classId', formData.classId);
+                payload.append('subjectId', formData.subjectId);
+                payload.append('date', formData.date);
+                payload.append('duration', formData.duration);
+                payload.append('totalMarks', formData.totalMarks);
+                payload.append('paper', formData.paperFile);
+                // Assuming backend accepts multipart/form-data
+                await api.post('/exams', payload, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            } else {
+                await api.post('/exams', {
+                    ...formData,
+                    questions: [] // Simplified: no questions, just marks
+                });
+            }
             alert("Exam created!");
             setViewMode('list');
+            // Reset form
+            setFormData({ title: '', classId: '', subjectId: '', date: '', duration: 60, totalMarks: 100, paperFile: null });
             fetchExams();
         } catch (error) {
             console.error(error);
@@ -150,7 +174,9 @@ const TeacherExams = () => {
     // Helper to get subjects for selected class in Create Form
     const getSubjectsForClass = () => {
         const cls = classes.find(c => c._id === formData.classId);
-        return cls ? cls.subjectIds : [];
+        if (!cls) return [];
+        // Assuming cls.subjectIds is an array of subject IDs
+        return subjects.filter(s => cls.subjectIds && cls.subjectIds.includes(s._id));
     };
 
     if (viewMode === 'create') {
@@ -162,6 +188,10 @@ const TeacherExams = () => {
                         <label className="block">
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Title</span>
                             <input required className="w-full mt-1 p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} placeholder="e.g. Midterm Physics" />
+                        </label>
+                        <label className="block mt-2">
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Upload Paper (PDF/Image)</span>
+                            <input type="file" accept="image/*,application/pdf" className="w-full mt-1 p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700" onChange={e => setFormData({ ...formData, paperFile: e.target.files[0] })} />
                         </label>
                         <label className="block">
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Class</span>
@@ -182,7 +212,7 @@ const TeacherExams = () => {
                             <input required type="date" className="w-full mt-1 p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} />
                         </label>
                         <div className="flex gap-4 mt-4 md:col-span-2">
-                            <button type="button" onClick={() => setViewMode('list')} className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white">Cancel</button>
+                            <button type="button" onClick={() => { setViewMode('list'); setFormData({ title: '', classId: '', subjectId: '', date: '', duration: 60, totalMarks: 100, paperFile: null }); }} className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white">Cancel</button>
                             <button type="submit" className="px-4 py-2 rounded-lg bg-primary text-white">Create Exam</button>
                         </div>
                     </form>

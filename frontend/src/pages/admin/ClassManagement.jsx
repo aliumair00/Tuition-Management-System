@@ -63,6 +63,7 @@ const ClassManagement = () => {
             if (!formData.name || !formData.grade || !formData.section) return alert("All fields are required");
 
             await api.post('/classes', formData);
+            await fetchClasses();
             alert("Class added successfully!");
             setViewMode('list');
             setFormData({ name: '', grade: '', section: '' });
@@ -109,18 +110,20 @@ const ClassManagement = () => {
     const handleAddSubject = async (subjectId) => {
         if (!subjectId) return;
         try {
-            // Check if already added
-            if (selectedClass.subjectIds.some(s => s._id === subjectId)) return alert("Subject already added");
+            const currentSubjectObjs = selectedClass.subjectIds || [];
+            const currentSubjectIds = currentSubjectObjs.map(s => (typeof s === 'string' ? s : s._id));
+            if (currentSubjectIds.includes(subjectId)) return alert('Subject already added');
 
-            const updatedSubjects = [...selectedClass.subjectIds.map(s => s._id), subjectId];
+            const updatedSubjects = [...currentSubjectIds, subjectId];
             const { data } = await api.put(`/classes/${selectedClass._id}`, { subjectIds: updatedSubjects });
             if (data.success) {
-                // Refresh local state logic or re-fetch
                 const { data: newData } = await api.get(`/classes/${selectedClass._id}`);
                 setSelectedClass(newData.data);
+                setClasses(prev => prev.map(c => (c._id === newData.data._id ? newData.data : c)));
             }
         } catch (error) {
-            console.error("Failed to add subject", error);
+            console.error('Failed to add subject', error);
+            alert('Failed to add subject');
         }
     };
 
@@ -170,6 +173,9 @@ const ClassManagement = () => {
     };
 
 
+    const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
+    const [subjectSearchQuery, setSubjectSearchQuery] = useState('');
+
     if (viewMode === 'add') {
         return (
             <motion.div className="flex flex-col gap-6" variants={containerVariants} initial="hidden" animate="visible">
@@ -216,7 +222,7 @@ const ClassManagement = () => {
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">Manage: {selectedClass.name}</h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Enroll students and assign subjects.</p>
                     </div>
-                    <button onClick={() => setViewMode('list')} className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white text-sm font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                    <button onClick={() => { setSelectedClass(null); setViewMode('list'); }} className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white text-sm font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
                         Back to List
                     </button>
                 </div>
@@ -227,15 +233,15 @@ const ClassManagement = () => {
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Subjects</h3>
                             <div className="relative">
-                                <select
-                                    className="h-9 px-3 text-sm rounded-lg bg-background-light dark:bg-gray-900 border border-border-light dark:border-gray-700 outline-none"
-                                    onChange={(e) => { handleAddSubject(e.target.value); e.target.value = ''; }}
+                                <button
+                                    onClick={() => {
+                                        setIsSubjectModalOpen(true);
+                                        setSubjectSearchQuery('');
+                                    }}
+                                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold transition-colors"
                                 >
-                                    <option value="">+ Add Subject</option>
-                                    {availableSubjects.map(sub => (
-                                        <option key={sub._id} value={sub._id}>{sub.name} ({sub.code})</option>
-                                    ))}
-                                </select>
+                                    <Plus size={16} /> Add Subject
+                                </button>
                             </div>
                         </div>
                         <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -363,6 +369,74 @@ const ClassManagement = () => {
                                     <div className="p-8 text-center text-gray-500">
                                         <User className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
                                         <p>No matching students found.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+
+                {/* Add Subject Modal */}
+                {isSubjectModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+                        >
+                            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-800">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Add Subject</h3>
+                                <button onClick={() => setIsSubjectModalOpen(false)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-2.5 text-gray-400 w-5 h-5" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search subjects by name..."
+                                        value={subjectSearchQuery}
+                                        onChange={(e) => setSubjectSearchQuery(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="max-h-[400px] overflow-y-auto p-2">
+                                {availableSubjects.filter(s =>
+                                    !selectedClass.subjectIds?.some(existing => (typeof existing === 'string' ? existing : existing._id) === s._id) &&
+                                    s.name.toLowerCase().includes(subjectSearchQuery.toLowerCase())
+                                ).length > 0 ? (
+                                    <div className="space-y-1">
+                                        {availableSubjects
+                                            .filter(s =>
+                                                !selectedClass.subjectIds?.some(existing => (typeof existing === 'string' ? existing : existing._id) === s._id) &&
+                                                s.name.toLowerCase().includes(subjectSearchQuery.toLowerCase())
+                                            )
+                                            .map(subject => (
+                                                <div key={subject._id} className="flex justify-between items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors group">
+                                                    <div>
+                                                        <p className="font-medium text-gray-900 dark:text-white text-sm">{subject.name}</p>
+                                                        <p className="text-xs text-gray-500">{subject.code}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            handleAddSubject(subject._id);
+                                                        }}
+                                                        className="px-3 py-1.5 text-xs font-semibold bg-primary text-white rounded-md hover:bg-primary-dark transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                                    >
+                                                        Add
+                                                    </button>
+                                                </div>
+                                            ))}
+                                    </div>
+                                ) : (
+                                    <div className="p-8 text-center text-gray-500">
+                                        <BookOpen className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                                        <p>No matching subjects found.</p>
                                     </div>
                                 )}
                             </div>

@@ -10,6 +10,7 @@ import {
     ClipboardCheck // For task_alt/Attendance
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import api from '../../lib/api';
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -69,43 +70,35 @@ const ClassCard = ({ title, students, icon: Icon, colorClass, subjects }) => (
 );
 
 const TeacherClasses = () => {
-    const classes = [
-        {
-            title: "Grade 10 - Algebra II",
-            students: 32,
-            icon: Sigma,
-            colorClass: { bg: "bg-primary/10 dark:bg-primary/20", text: "text-primary", tagBg: "bg-primary/10 dark:bg-primary/20", tagText: "text-primary" },
-            subjects: ["Algebra", "Trigonometry"]
-        },
-        {
-            title: "Grade 11 - Physics",
-            students: 28,
-            icon: FlaskConical,
-            colorClass: { bg: "bg-green-500/10 dark:bg-green-500/20", text: "text-green-500", tagBg: "bg-green-500/10 dark:bg-green-500/20", tagText: "text-green-600 dark:text-green-400" },
-            subjects: ["Mechanics", "Thermodynamics"]
-        },
-        {
-            title: "Grade 9 - Geometry",
-            students: 35,
-            icon: Ruler,
-            colorClass: { bg: "bg-amber-500/10 dark:bg-amber-500/20", text: "text-amber-500", tagBg: "bg-amber-500/10 dark:bg-amber-500/20", tagText: "text-amber-600 dark:text-amber-400" },
-            subjects: ["Euclidean Geometry"]
-        },
-        {
-            title: "Grade 12 - Literature",
-            students: 22,
-            icon: BookOpen,
-            colorClass: { bg: "bg-rose-500/10 dark:bg-rose-500/20", text: "text-rose-500", tagBg: "bg-rose-500/10 dark:bg-rose-500/20", tagText: "text-rose-600 dark:text-rose-400" },
-            subjects: ["Modernism", "Poetry Analysis"]
-        },
-        {
-            title: "Grade 10 - History",
-            students: 30,
-            icon: History,
-            colorClass: { bg: "bg-indigo-500/10 dark:bg-indigo-500/20", text: "text-indigo-500", tagBg: "bg-indigo-500/10 dark:bg-indigo-500/20", tagText: "text-indigo-600 dark:text-indigo-400" },
-            subjects: ["World History"]
-        }
+    const [classes, setClasses] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
+
+    React.useEffect(() => {
+        const fetchClasses = async () => {
+            try {
+                const { data } = await api.get('/classes/my');
+                if (data.success) {
+                    setClasses(data.data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch classes', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchClasses();
+    }, []);
+
+    // Color palettes to cycle through
+    const colorPalettes = [
+        { bg: "bg-primary/10 dark:bg-primary/20", text: "text-primary", tagBg: "bg-primary/10 dark:bg-primary/20", tagText: "text-primary" },
+        { bg: "bg-green-500/10 dark:bg-green-500/20", text: "text-green-500", tagBg: "bg-green-500/10 dark:bg-green-500/20", tagText: "text-green-600 dark:text-green-400" },
+        { bg: "bg-amber-500/10 dark:bg-amber-500/20", text: "text-amber-500", tagBg: "bg-amber-500/10 dark:bg-amber-500/20", tagText: "text-amber-600 dark:text-amber-400" },
+        { bg: "bg-rose-500/10 dark:bg-rose-500/20", text: "text-rose-500", tagBg: "bg-rose-500/10 dark:bg-rose-500/20", tagText: "text-rose-600 dark:text-rose-400" },
+        { bg: "bg-indigo-500/10 dark:bg-indigo-500/20", text: "text-indigo-500", tagBg: "bg-indigo-500/10 dark:bg-indigo-500/20", tagText: "text-indigo-600 dark:text-indigo-400" }
     ];
+
+    const icons = [Sigma, FlaskConical, Ruler, BookOpen, History];
 
     return (
         <motion.div
@@ -121,11 +114,33 @@ const TeacherClasses = () => {
                 </div>
             </motion.header>
 
-            <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {classes.map((cls, index) => (
-                    <ClassCard key={index} {...cls} />
-                ))}
-            </motion.div>
+            {loading ? (
+                <div className="p-10 text-center text-gray-500">Loading classes...</div>
+            ) : (
+                <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {classes.length > 0 ? (
+                        classes.map((cls, index) => {
+                            const palette = colorPalettes[index % colorPalettes.length];
+                            const Icon = icons[index % icons.length];
+
+                            return (
+                                <ClassCard
+                                    key={cls._id}
+                                    title={`${cls.grade} - ${cls.name} (${cls.section})`}
+                                    students={cls.students ? cls.students.length : 0}
+                                    icon={Icon}
+                                    colorClass={palette} // Pass the full palette object correctly
+                                    subjects={cls.subjectIds ? cls.subjectIds.map(s => s.name) : []}
+                                />
+                            );
+                        })
+                    ) : (
+                        <div className="col-span-full p-10 text-center text-gray-500 bg-white dark:bg-card-dark rounded-xl border border-gray-100 dark:border-gray-800">
+                            No classes assigned to you yet.
+                        </div>
+                    )}
+                </motion.div>
+            )}
         </motion.div>
     );
 };

@@ -6,7 +6,7 @@ const emailService = require('../services/emailService');
 // @desc    Create a notification (e.g., send email/SMS or in-app)
 // @route   POST /api/notifications
 // @access  Teacher/Admin
-exports.createNotification = asyncHandler(async (req, res) => {
+const createNotification = asyncHandler(async (req, res) => {
     const { userId, type, title, message } = req.body;
     const notification = await Notification.create({ userId, type, title, message });
     // If email type, trigger email service (fire-and-forget)
@@ -19,15 +19,23 @@ exports.createNotification = asyncHandler(async (req, res) => {
 // @desc    Get notifications for a user
 // @route   GET /api/notifications/user/:userId
 // @access  Authenticated
-exports.getUserNotifications = asyncHandler(async (req, res) => {
+const getUserNotifications = asyncHandler(async (req, res) => {
     const notifications = await Notification.find({ userId: req.params.userId }).sort({ createdAt: -1 });
+    res.json({ success: true, count: notifications.length, data: notifications });
+});
+
+// @desc    Get my notifications
+// @route   GET /api/notifications/my
+// @access  Authenticated
+const getMyNotifications = asyncHandler(async (req, res) => {
+    const notifications = await Notification.find({ userId: req.user.id }).sort({ createdAt: -1 });
     res.json({ success: true, count: notifications.length, data: notifications });
 });
 
 // @desc    Mark notification as read
 // @route   PATCH /api/notifications/:id/read
 // @access  Authenticated
-exports.markAsRead = asyncHandler(async (req, res) => {
+const markAsRead = asyncHandler(async (req, res) => {
     const notification = await Notification.findById(req.params.id);
     if (!notification) {
         return res.status(404).json({ success: false, error: 'Notification not found' });
@@ -36,3 +44,5 @@ exports.markAsRead = asyncHandler(async (req, res) => {
     await notification.save();
     res.json({ success: true, data: notification });
 });
+
+module.exports = { createNotification, getUserNotifications, markAsRead, getMyNotifications };

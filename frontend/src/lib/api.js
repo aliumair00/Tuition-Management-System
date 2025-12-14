@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create an Axios instance
 const api = axios.create({
-    baseURL: 'http://localhost:5000/api', // Assumes backend runs on port 5000
+    baseURL: '/api', // Use Vite proxy to avoid CORS problems
     headers: {
         'Content-Type': 'application/json',
     },

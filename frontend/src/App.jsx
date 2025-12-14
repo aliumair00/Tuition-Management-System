@@ -26,6 +26,7 @@ import TeacherTimetable from './pages/teacher/TeacherTimetable';
 import TeacherMaterials from './pages/teacher/TeacherMaterials';
 import TeacherAttendance from './pages/teacher/TeacherAttendance';
 import TeacherExams from './pages/teacher/TeacherExams';
+import TeacherSettings from './pages/teacher/TeacherSettings';
 import StudentTimetable from './pages/student/StudentTimetable';
 import StudentResults from './pages/student/StudentResults';
 import StudentFees from './pages/student/StudentFees';
@@ -35,7 +36,7 @@ import ParentCalendar from './pages/parent/ParentCalendar';
 import ParentChildren from './pages/parent/ParentChildren';
 import ParentFees from './pages/parent/ParentFees';
 import ParentSettings from './pages/parent/ParentSettings';
-
+import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 
 function App() {
@@ -49,42 +50,66 @@ function App() {
 
           {/* Admin Routes */}
           <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-          <Route path="/admin/dashboard" element={<AdminLayout><AdminDashboard /></AdminLayout>} />
-          <Route path="/admin/classes" element={<AdminLayout><ClassManagement /></AdminLayout>} />
-          <Route path="/admin/subjects" element={<AdminLayout><SubjectManagement /></AdminLayout>} />
-          <Route path="/admin/attendance" element={<AdminLayout><AttendanceManagement /></AdminLayout>} />
-          <Route path="/admin/students" element={<AdminLayout><StudentManagement /></AdminLayout>} />
-          <Route path="/admin/students" element={<AdminLayout><StudentManagement /></AdminLayout>} />
-          <Route path="/admin/students/add" element={<AdminLayout><AddStudent /></AdminLayout>} />
-          <Route path="/admin/teachers" element={<AdminLayout><TeacherManagement /></AdminLayout>} />
-          <Route path="/admin/teachers/add" element={<AdminLayout><AddTeacher /></AdminLayout>} />
-          <Route path="/admin/reports" element={<AdminLayout><AttendanceReports /></AdminLayout>} />
-          <Route path="/admin/billing" element={<AdminLayout><BillingManagement /></AdminLayout>} />
-          <Route path="/admin/timetable" element={<AdminLayout><TimetableManagement /></AdminLayout>} />
-          <Route path="/admin/settings" element={<AdminLayout><AdminSettings /></AdminLayout>} />
+          <Route path="/admin/*" element={
+            <ProtectedRoute allowedRoles={['Admin']}>
+              <Routes>
+                <Route path="dashboard" element={<AdminLayout><AdminDashboard /></AdminLayout>} />
+                <Route path="classes" element={<AdminLayout><ClassManagement /></AdminLayout>} />
+                <Route path="subjects" element={<AdminLayout><SubjectManagement /></AdminLayout>} />
+                <Route path="attendance" element={<AdminLayout><AttendanceManagement /></AdminLayout>} />
+                <Route path="students" element={<AdminLayout><StudentManagement /></AdminLayout>} />
+                <Route path="students/add" element={<AdminLayout><AddStudent /></AdminLayout>} />
+                <Route path="teachers" element={<AdminLayout><TeacherManagement /></AdminLayout>} />
+                <Route path="teachers/add" element={<AdminLayout><AddTeacher /></AdminLayout>} />
+                <Route path="reports" element={<AdminLayout><AttendanceReports /></AdminLayout>} />
+                <Route path="billing" element={<AdminLayout><BillingManagement /></AdminLayout>} />
+                <Route path="timetable" element={<AdminLayout><TimetableManagement /></AdminLayout>} />
+                <Route path="settings" element={<AdminLayout><AdminSettings /></AdminLayout>} />
+              </Routes>
+            </ProtectedRoute>
+          } />
 
           {/* Teacher Routes */}
-          <Route path="/teacher/dashboard" element={<TeacherLayout><TeacherDashboard /></TeacherLayout>} />
-          <Route path="/teacher/classes" element={<TeacherLayout><TeacherClasses /></TeacherLayout>} />
-          <Route path="/teacher/timetable" element={<TeacherLayout><TeacherTimetable /></TeacherLayout>} />
-          <Route path="/teacher/materials" element={<TeacherLayout><TeacherMaterials /></TeacherLayout>} />
-          <Route path="/teacher/attendance" element={<TeacherLayout><TeacherAttendance /></TeacherLayout>} />
-          <Route path="/teacher/exams" element={<TeacherLayout><TeacherExams /></TeacherLayout>} />
+          <Route path="/teacher/*" element={
+            <ProtectedRoute allowedRoles={['Teacher']}>
+              <Routes>
+                <Route path="dashboard" element={<TeacherLayout><TeacherDashboard /></TeacherLayout>} />
+                <Route path="classes" element={<TeacherLayout><TeacherClasses /></TeacherLayout>} />
+                <Route path="timetable" element={<TeacherLayout><TeacherTimetable /></TeacherLayout>} />
+                <Route path="materials" element={<TeacherLayout><TeacherMaterials /></TeacherLayout>} />
+                <Route path="attendance" element={<TeacherLayout><TeacherAttendance /></TeacherLayout>} />
+                <Route path="exams" element={<TeacherLayout><TeacherExams /></TeacherLayout>} />
+                <Route path="settings" element={<TeacherLayout><TeacherSettings /></TeacherLayout>} />
+              </Routes>
+            </ProtectedRoute>
+          } />
 
           {/* Student Routes */}
-          <Route path="/student/dashboard" element={<StudentLayout><StudentDashboard /></StudentLayout>} />
-          <Route path="/student/timetable" element={<StudentLayout><StudentTimetable /></StudentLayout>} />
-          <Route path="/student/results" element={<StudentLayout><StudentResults /></StudentLayout>} />
-          <Route path="/student/fees" element={<StudentLayout><StudentFees /></StudentLayout>} />
-          <Route path="/student/materials" element={<StudentLayout><StudentMaterials /></StudentLayout>} />
-          <Route path="/student/profile" element={<StudentLayout><StudentProfile /></StudentLayout>} />
+          <Route path="/student/*" element={
+            <ProtectedRoute allowedRoles={['Student']}>
+              <Routes>
+                <Route path="dashboard" element={<StudentLayout><StudentDashboard /></StudentLayout>} />
+                <Route path="timetable" element={<StudentLayout><StudentTimetable /></StudentLayout>} />
+                <Route path="results" element={<StudentLayout><StudentResults /></StudentLayout>} />
+                <Route path="fees" element={<StudentLayout><StudentFees /></StudentLayout>} />
+                <Route path="materials" element={<StudentLayout><StudentMaterials /></StudentLayout>} />
+                <Route path="profile" element={<StudentLayout><StudentProfile /></StudentLayout>} />
+              </Routes>
+            </ProtectedRoute>
+          } />
 
           {/* Parent Routes */}
-          <Route path="/parent/dashboard" element={<ParentLayout><ParentDashboard /></ParentLayout>} />
-          <Route path="/parent/calendar" element={<ParentLayout><ParentCalendar /></ParentLayout>} />
-          <Route path="/parent/children" element={<ParentLayout><ParentChildren /></ParentLayout>} />
-          <Route path="/parent/fees" element={<ParentLayout><ParentFees /></ParentLayout>} />
-          <Route path="/parent/settings" element={<ParentLayout><ParentSettings /></ParentLayout>} />
+          <Route path="/parent/*" element={
+            <ProtectedRoute allowedRoles={['Parent']}>
+              <Routes>
+                <Route path="dashboard" element={<ParentLayout><ParentDashboard /></ParentLayout>} />
+                <Route path="calendar" element={<ParentLayout><ParentCalendar /></ParentLayout>} />
+                <Route path="children" element={<ParentLayout><ParentChildren /></ParentLayout>} />
+                <Route path="fees" element={<ParentLayout><ParentFees /></ParentLayout>} />
+                <Route path="settings" element={<ParentLayout><ParentSettings /></ParentLayout>} />
+              </Routes>
+            </ProtectedRoute>
+          } />
 
         </Routes>
       </Router>

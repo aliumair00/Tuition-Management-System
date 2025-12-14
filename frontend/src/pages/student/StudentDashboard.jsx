@@ -15,68 +15,91 @@ const StudentDashboard = () => {
 
     useEffect(() => {
         const fetchDashboardData = async () => {
+            setLoading(true);
             try {
-                setLoading(true);
-                // 1. Fetch Attendance
-                const attRes = await api.get('/attendance/my');
-                if (attRes.data.success) {
-                    const total = attRes.data.data.length;
-                    const present = attRes.data.data.filter(r => r.status === 'Present').length;
-                    setAttendance({
-                        present,
-                        total,
-                        percentage: total > 0 ? Math.round((present / total) * 100) : 0
-                    });
-                }
+                // We use Promise.allSettled to ensure one failure doesn't block others
+                // However, some depend on previous data (like classId), so we'll do a mix.
 
-                // 2. Fetch Results
-                const resRes = await api.get('/results/my');
-                if (resRes.data.success) {
-                    setResults(resRes.data.data.slice(0, 1)); // Just latest one for now
-                }
+                // Parallel fetch for independent data
+                await Promise.allSettled([
+                    (async () => {
+                        try {
+                            const attRes = await api.get('/attendance/my');
+                            if (attRes.data.success) {
+                                const total = attRes.data.data.length;
+                                const present = attRes.data.data.filter(r => r.status === 'Present').length;
+                                setAttendance({
+                                    present,
+                                    total,
+                                    percentage: total > 0 ? Math.round((present / total) * 100) : 0
+                                });
+                            }
+                        } catch (e) { console.error("Attendance fetch failed", e); }
+                    })(),
+                    (async () => {
+                        try {
+                            const resRes = await api.get('/results/my');
+                            if (resRes.data.success) {
+                                // Add check to ensure data is an array
+                                const resultsData = Array.isArray(resRes.data.data) ? resRes.data.data : [];
+                                setResults(resultsData.slice(0, 1));
+                            }
+                        } catch (e) { console.error("Results fetch failed", e); }
+                    })(),
+                    (async () => {
+                        try {
+                            const feeRes = await api.get('/invoices/my');
+                            if (feeRes.data.success) {
+                                const invoices = Array.isArray(feeRes.data.data) ? feeRes.data.data : [];
+                                const pending = invoices.find(inv => !inv.paid);
+                                if (pending) {
+                                    setFees({
+                                        status: 'Pending',
+                                        nextDue: new Date(pending.dueDate).toLocaleDateString(),
+                                        hasPending: true
+                                    });
+                                } else if (invoices.length > 0) {
+                                    setFees({
+                                        status: 'Paid',
+                                        nextDue: 'No upcoming dues',
+                                        hasPending: false
+                                    });
+                                }
+                            }
+                        } catch (e) { console.error("Fees fetch failed", e); }
+                    })()
+                ]);
 
-                // 3. Fetch Fees
-                const feeRes = await api.get('/invoices/my');
-                if (feeRes.data.success) {
-                    const pending = feeRes.data.data.find(inv => !inv.paid);
-                    if (pending) {
-                        setFees({
-                            status: 'Pending',
-                            nextDue: new Date(pending.dueDate).toLocaleDateString(),
-                            hasPending: true
-                        });
-                    } else if (feeRes.data.data.length > 0) {
-                        setFees({
-                            status: 'Paid',
-                            nextDue: 'No upcoming dues',
-                            hasPending: false
-                        });
-                    }
-                }
-
-                // 4. Fetch Timetable & Materials (Need Class ID)
-                // Assuming user object has classId or we fetch it from profile
-                // For simplified flow, if user has classId populated
+                // Class dependent data
                 if (user?.classId) {
-                    // Fetch Timetable (mocking calls for now as logic supports classId lookup)
-                    const timeRes = await api.get(`/timetables/class/${user.classId}`);
-                    if (timeRes.data.success) {
-                        // Filter for today's day name if needed, or show all
-                        // For dashboard we usually show "Today"
-                        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                        const today = days[new Date().getDay()];
-                        const todaySchedule = timeRes.data.data.find(t => t.dayOfWeek === today);
-                        if (todaySchedule) setTimetable(todaySchedule.periods);
-                    }
-
-                    const matRes = await api.get(`/materials/class/${user.classId}`);
-                    if (matRes.data.success) {
-                        setMaterials(matRes.data.data.slice(0, 3));
-                    }
+                    await Promise.allSettled([
+                        (async () => {
+                            try {
+                                const timeRes = await api.get(`/timetables/class/${user.classId}`);
+                                if (timeRes.data.success) {
+                                    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                                    const today = days[new Date().getDay()];
+                                    // Handle if timetable structure is different
+                                    const timetableData = Array.isArray(timeRes.data.data) ? timeRes.data.data : [];
+                                    const todaySchedule = timetableData.find(t => t.dayOfWeek === today);
+                                    if (todaySchedule) setTimetable(todaySchedule.periods);
+                                }
+                            } catch (e) { console.error("Timetable fetch failed", e); }
+                        })(),
+                        (async () => {
+                            try {
+                                const matRes = await api.get(`/materials/class/${user.classId}`);
+                                if (matRes.data.success) {
+                                    const materialsData = Array.isArray(matRes.data.data) ? matRes.data.data : [];
+                                    setMaterials(materialsData.slice(0, 3));
+                                }
+                            } catch (e) { console.error("Materials fetch failed", e); }
+                        })()
+                    ]);
                 }
 
             } catch (error) {
-                console.error("Dashboard fetch error", error);
+                console.error("Dashboard global fetch error", error);
             } finally {
                 setLoading(false);
             }
@@ -137,7 +160,7 @@ const StudentDashboard = () => {
                                     <p className="text-sm text-gray-500">No results yet.</p>
                                 )}
                             </div>
-                            <button className="mt-4 text-sm font-medium text-primary hover:underline text-left">View All Results</button>
+                            <button onClick={() => window.location.href = '/student/results'} className="mt-4 text-sm font-medium text-primary hover:underline text-left">View All Results</button>
                         </div>
 
                         {/* Fees */}

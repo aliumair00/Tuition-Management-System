@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 const Register = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [formData, setFormData] = useState({
-        name: '', email: '', password: '', role: 'student'
+        name: '', email: '', password: '', role: 'Student'
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -19,13 +19,6 @@ const Register = () => {
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
-
-    const normalizeRole = (r) => ({
-        student: 'Student',
-        teacher: 'Teacher',
-        parent: 'Parent',
-        admin: 'Admin'
-    }[String(r).toLowerCase()] || 'Student');
 
     const handleRegister = async (e) => {
         e.preventDefault();
@@ -38,7 +31,7 @@ const Register = () => {
                 name: formData.name,
                 email: formData.email,
                 password: formData.password,
-                role: normalizeRole(formData.role)
+                role: formData.role
             });
 
             if (res.data.success) {
@@ -207,9 +200,9 @@ const Register = () => {
                                                 value={formData.role}
                                                 onChange={handleChange}
                                             >
-                                                <option value="student">Student</option>
-                                                <option value="teacher">Teacher</option>
-                                                <option value="parent">Parent</option>
+                                                <option value="Student">Student</option>
+                                                <option value="Teacher">Teacher</option>
+                                                <option value="Parent">Parent</option>
                                             </motion.select>
                                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 dark:text-gray-400">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>

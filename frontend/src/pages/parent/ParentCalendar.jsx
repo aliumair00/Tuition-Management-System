@@ -1,40 +1,117 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Calendar as CalendarIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import api from '../../lib/api';
 
 const ParentCalendar = () => {
-    const [current, setCurrent] = useState(() => {
-        const d = new Date();
-        return { year: d.getFullYear(), month: d.getMonth() };
-    });
+    const [currentDate, setCurrentDate] = useState(new Date());
     const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [selectedFilters, setSelectedFilters] = useState({
+        Holiday: true,
+        Exam: true,
+        Meeting: true,
+        Other: true
+    });
+
+    // Helper to get days in month
+    const getDaysInMonth = (date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const days = new Date(year, month + 1, 0).getDate();
+        const firstDay = new Date(year, month, 1).getDay(); // 0 = Sunday
+        return { days, firstDay };
+    };
+
+    const { days, firstDay } = getDaysInMonth(currentDate);
+
+    // Filter colors mapping
+    const eventColors = {
+        Holiday: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200',
+        Exam: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200',
+        Meeting: 'bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200',
+        Other: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200'
+    };
+
+    const eventIcons = {
+        Holiday: 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30',
+        Exam: 'text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30',
+        Meeting: 'text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30',
+        Other: 'text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30'
+    };
 
     useEffect(() => {
-        const fetchEvents = async () => {
-            try {
-                const { data } = await api.get('/events');
-                if (data.success) setEvents(data.data);
-            } catch (e) {}
-        };
         fetchEvents();
     }, []);
 
-    const monthName = new Date(current.year, current.month, 1).toLocaleString('default', { month: 'long' });
-    const daysInMonth = new Date(current.year, current.month + 1, 0).getDate();
-    const firstDayIndex = new Date(current.year, current.month, 1).getDay();
-    const prevMonthDays = Array.from({ length: firstDayIndex }).map((_, i) => {
-        const prevMonthLastDay = new Date(current.year, current.month, 0).getDate();
-        return prevMonthLastDay - firstDayIndex + 1 + i;
-    });
-    const nextFillCount = Math.max(0, 42 - (prevMonthDays.length + daysInMonth + 7));
+    const fetchEvents = async () => {
+        setLoading(true);
+        try {
+            const { data } = await api.get('/events');
+            if (data.success) {
+                setEvents(data.data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch events:', err);
+            setError('Failed to load events');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const prevMonth = () => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    };
+
+    const nextMonth = () => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    };
+
+    const goToToday = () => {
+        setCurrentDate(new Date());
+    };
+
+    const toggleFilter = (type) => {
+        setSelectedFilters(prev => ({ ...prev, [type]: !prev[type] }));
+    };
+
+    const isToday = (day) => {
+        const today = new Date();
+        return day === today.getDate() &&
+            currentDate.getMonth() === today.getMonth() &&
+            currentDate.getFullYear() === today.getFullYear();
+    };
+
     const getEventsForDay = (day) => {
-        const start = new Date(current.year, current.month, day);
-        return events.filter(e => {
-            const sd = new Date(e.startDate);
-            return sd.getFullYear() === start.getFullYear() && sd.getMonth() === start.getMonth() && sd.getDate() === start.getDate();
+        return events.filter(event => {
+            if (!selectedFilters[event.type]) return false;
+            const eventDate = new Date(event.startDate);
+            return eventDate.getDate() === day &&
+                eventDate.getMonth() === currentDate.getMonth() &&
+                eventDate.getFullYear() === currentDate.getFullYear();
         });
     };
+
+    const getUpcomingEvents = () => {
+        const today = new Date();
+        return events
+            .filter(event => new Date(event.startDate) >= today)
+            .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+            .slice(0, 3);
+    };
+
+    const monthNames = ["January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-full min-h-[400px]">
+                <Loader2 className="animate-spin text-primary" size={40} />
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col lg:flex-row gap-6 h-full">
@@ -43,23 +120,20 @@ const ParentCalendar = () => {
                 <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
                     <p className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white">School Calendar & Events</p>
                     <div className="flex gap-2">
-                        <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
+                        <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
                             <ChevronLeft size={20} />
                         </button>
-                        <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
+                        <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
                             <ChevronRight size={20} />
                         </button>
-                        <button className="h-10 px-4 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors">Today</button>
+                        <button onClick={goToToday} className="h-10 px-4 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors">Today</button>
                     </div>
                 </div>
 
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{monthName} {current.year}</h3>
-                    <div className="hidden sm:flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                        <button className="px-3 py-1 rounded text-sm bg-white dark:bg-primary/20 dark:text-primary shadow-sm font-semibold text-primary">Month</button>
-                        <button className="px-3 py-1 rounded text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">Week</button>
-                        <button className="px-3 py-1 rounded text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">Day</button>
-                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                        {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+                    </h3>
                 </div>
 
                 {/* Calendar Grid */}
@@ -71,41 +145,42 @@ const ParentCalendar = () => {
                         </div>
                     ))}
 
-                    {[...prevMonthDays].map((d) => (
-                        <div key={`prev-${d}`} className="p-2 min-h-[100px] sm:h-28 bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500">
-                            {d}
+                    {/* Empty cells for previous month */}
+                    {[...Array(firstDay)].map((_, i) => (
+                        <div key={`prev-${i}`} className="p-2 min-h-[100px] sm:h-28 bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-900/50">
                         </div>
                     ))}
 
-                    {[...Array(daysInMonth)].map((_, i) => {
+                    {/* Current Month Days */}
+                    {[...Array(days)].map((_, i) => {
                         const day = i + 1;
                         const dayEvents = getEventsForDay(day);
 
                         return (
                             <div key={`curr-${day}`} className="p-2 min-h-[100px] sm:h-28 bg-white dark:bg-gray-800 relative group transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                <span className={`font-semibold text-sm text-gray-700 dark:text-gray-300`}>
+                                <span className={`font-semibold text-sm ${isToday(day) ? 'bg-primary text-white rounded-full size-7 flex items-center justify-center' : 'text-gray-700 dark:text-gray-300'}`}>
                                     {day}
                                 </span>
-                                {dayEvents.slice(0,2).map((ev) => (
-                                    <div key={ev._id} className={`mt-1 text-xs p-1 rounded truncate ${
-                                        ev.type === 'Exam' ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200' :
-                                        ev.type === 'Holiday' ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200' :
-                                        ev.type === 'Meeting' ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200' :
-                                        'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200'
-                                    }`}>
-                                        {ev.title}
-                                    </div>
-                                ))}
+                                <div className="flex flex-col gap-1 mt-1 overflow-y-auto max-h-[80px] custom-scrollbar">
+                                    {dayEvents.map(event => (
+                                        <div
+                                            key={event._id}
+                                            className={`text-xs p-1 rounded truncate cursor-help ${eventColors[event.type] || eventColors.Other}`}
+                                            title={`${event.title} (${event.type})`}
+                                        >
+                                            {event.title}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         );
                     })}
 
-                    {[...Array(Math.max(0, 42 - (prevMonthDays.length + daysInMonth)))].map((_, i) => (
-                        <div key={`next-${i + 1}`} className="p-2 min-h-[100px] sm:h-28 bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500">
-                            {i + 1}
+                    {/* Next Month Days to fill grid - simplified */}
+                    {[...Array(42 - days - firstDay)].map((_, i) => (
+                        <div key={`next-${i}`} className="p-2 min-h-[100px] sm:h-28 bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-900/50">
                         </div>
                     ))}
-
                 </div>
             </div>
 
@@ -114,46 +189,51 @@ const ParentCalendar = () => {
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <h3 className="font-bold text-lg mb-4 text-gray-900 dark:text-white">Event Filters</h3>
                     <div className="flex flex-col gap-3">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                            <input defaultChecked className="form-checkbox h-5 w-5 rounded text-green-500 border-gray-300 focus:ring-green-500" type="checkbox" />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">Holidays</span>
-                        </label>
-                        <label className="flex items-center gap-3 cursor-pointer">
-                            <input defaultChecked className="form-checkbox h-5 w-5 rounded text-yellow-500 border-gray-300 focus:ring-yellow-500" type="checkbox" />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">Exams</span>
-                        </label>
-                        <label className="flex items-center gap-3 cursor-pointer">
-                            <input defaultChecked className="form-checkbox h-5 w-5 rounded text-purple-500 border-gray-300 focus:ring-purple-500" type="checkbox" />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">Meetings</span>
-                        </label>
-                        <label className="flex items-center gap-3 cursor-pointer">
-                            <input defaultChecked className="form-checkbox h-5 w-5 rounded text-orange-500 border-gray-300 focus:ring-orange-500" type="checkbox" />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">School Events</span>
-                        </label>
+                        {Object.keys(selectedFilters).map(type => (
+                            <label key={type} className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedFilters[type]}
+                                    onChange={() => toggleFilter(type)}
+                                    className={`form-checkbox h-5 w-5 rounded border-gray-300 focus:ring-opacity-50
+                                        ${type === 'Holiday' ? 'text-green-500 focus:ring-green-500' :
+                                            type === 'Exam' ? 'text-yellow-500 focus:ring-yellow-500' :
+                                                type === 'Meeting' ? 'text-purple-500 focus:ring-purple-500' :
+                                                    'text-orange-500 focus:ring-orange-500'}`}
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                    {type === 'Other' ? 'School Events' : type + 's'}
+                                </span>
+                            </label>
+                        ))}
                     </div>
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                     <h3 className="font-bold text-lg mb-4 text-gray-900 dark:text-white">Upcoming Events</h3>
                     <div className="flex flex-col gap-4">
-                        {events.slice(0,5).map(ev => {
-                            const d = new Date(ev.startDate);
-                            const mon = d.toLocaleString('default', { month: 'short' }).toUpperCase();
-                            const day = d.getDate();
-                            const color = ev.type === 'Meeting' ? 'purple' : ev.type === 'Holiday' ? 'green' : ev.type === 'Exam' ? 'yellow' : 'orange';
-                            return (
-                                <div key={ev._id} className="flex gap-4 items-start">
-                                    <div className={`flex-shrink-0 w-12 h-12 rounded-lg bg-${color}-100 dark:bg-${color}-900/30 flex flex-col items-center justify-center text-${color}-600 dark:text-${color}-400`}>
-                                        <span className="text-xs font-bold uppercase">{mon}</span>
-                                        <span className="text-xl font-extrabold">{day}</span>
+                        {getUpcomingEvents().length === 0 ? (
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">No upcoming events scheduled.</p>
+                        ) : (
+                            getUpcomingEvents().map(event => {
+                                const date = new Date(event.startDate);
+                                return (
+                                    <div key={event._id} className="flex gap-4 items-start">
+                                        <div className={`flex-shrink-0 w-12 h-12 rounded-lg flex flex-col items-center justify-center ${eventIcons[event.type] || eventIcons.Other}`}>
+                                            <span className="text-xs font-bold uppercase">{monthNames[date.getMonth()].slice(0, 3)}</span>
+                                            <span className="text-xl font-extrabold">{date.getDate()}</span>
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-sm text-gray-900 dark:text-white">{event.title}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                {event.endDate && ` - ${new Date(event.endDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="font-semibold text-sm text-gray-900 dark:text-white">{ev.title}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">{ev.type}</p>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })
+                        )}
                     </div>
                 </div>
             </div>

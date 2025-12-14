@@ -59,20 +59,18 @@ const AddTeacher = () => {
                 return;
             }
 
-            const data = new FormData();
-            Object.keys(formData).forEach(key => {
-                data.append(key, formData[key]);
-            });
-            if (file) {
-                data.append('profileImage', file);
-            }
-
-            await api.post('/users', data);
+            // Send JSON payload (no file upload handling for now)
+            const payload = { ...formData };
+            // If you later add file upload support, handle it separately.
+            await api.post('/users', payload);
             alert("Teacher added successfully!");
             navigate('/admin/teachers');
         } catch (error) {
             console.error("Failed to add teacher", error);
-            alert("Failed to add teacher. Please try again.");
+            const msg = error?.response?.data?.error?.message
+                || error?.response?.data?.message
+                || "Failed to add teacher. Please try again.";
+            alert(msg);
         } finally {
             setLoading(false);
         }

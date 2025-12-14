@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, GraduationCap } from 'lucide-react';
+import { Eye, EyeOff, GraduationCap, AlertCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import LightRays from '../../components/LightRays';
@@ -132,6 +132,16 @@ const Login = () => {
 
                             {/* Form */}
                             <form onSubmit={handleLogin} className="flex w-full flex-col items-stretch gap-4">
+                                {error && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="p-3 rounded-lg bg-red-100 text-red-600 text-sm border border-red-200 flex items-center gap-2"
+                                    >
+                                        <AlertCircle size={18} />
+                                        <span>{error}</span>
+                                    </motion.div>
+                                )}
                                 {/* Email */}
                                 <motion.div whileHover={{ scale: 1.02 }} className="flex flex-col">
                                     <label className="flex flex-col min-w-40 flex-1">

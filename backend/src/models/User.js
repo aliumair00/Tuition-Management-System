@@ -19,7 +19,8 @@ const UserSchema = new mongoose.Schema({
     role: {
         type: String,
         enum: ['Admin', 'Teacher', 'Student', 'Parent'],
-        default: 'Student'
+        default: 'Student',
+        set: (v) => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : 'Student'
     },
     password: {
         type: String,
@@ -43,6 +44,17 @@ const UserSchema = new mongoose.Schema({
     },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
+    address: String,
+    emergencyContact: {
+        name: String,
+        relationship: String,
+        phone: String
+    },
+    notificationPreferences: {
+        email: { type: Boolean, default: true },
+        sms: { type: Boolean, default: false },
+        app: { type: Boolean, default: true }
+    },
     meta: Object, // Store any extra dynamic fields
     createdAt: {
         type: Date,
@@ -62,7 +74,7 @@ UserSchema.pre('save', async function () {
 
 // Sign JWT and return
 UserSchema.methods.getSignedJwtToken = function () {
-    return jwt.sign({ id: this._id, role: this.role }, process.env.JWT_ACCESS_SECRET, {
+    return jwt.sign({ id: this._id, role: this.role }, process.env.JWT_SECRET, {
         expiresIn: process.env.JWT_EXPIRE || '15m'
     });
 };

@@ -65,29 +65,76 @@ const TimetableItem = ({ time, title, room, icon: Icon, type, isLast }) => {
 };
 
 const TeacherDashboard = () => {
-    const [classes, setClasses] = useState([]);
+    const [dashboardData, setDashboardData] = useState({
+        classes: [],
+        upcomingExams: [],
+        todaysTimetable: [],
+        stats: {
+            totalClasses: 0,
+            totalStudents: 0
+        }
+    });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchClasses = async () => {
+        const fetchDashboardData = async () => {
             try {
-                const { data } = await api.get('/classes/my');
-                if (data.success) {
-                    setClasses(data.data);
+                // Fetch classes (reusing existing endpoint if needed, or rely on analytics)
+                // Actually, let's use the new analytics endpoint for everything to be efficient
+                // But wait, the analytics endpoint returns class count, not full class list for the cards?
+                // Let's check my implementation plan... I said "fetch classes (reusing existing endpoint)".
+                // But let's see if I can do valid hybrid approach.
+                // The analytics endpoint I wrote returns `classes.length` only for `totalClasses`.
+                // So I still need to fetch `/classes/my` for the "My Classes" section.
+
+                const [analyticsRes, classesRes] = await Promise.all([
+                    api.get('/analytics/teacher'),
+                    api.get('/classes/my')
+                ]);
+
+                if (analyticsRes.data.success) {
+                    setDashboardData(prev => ({
+                        ...prev,
+                        upcomingExams: analyticsRes.data.data.upcomingExams,
+                        todaysTimetable: analyticsRes.data.data.todaysTimetable,
+                        stats: {
+                            totalClasses: analyticsRes.data.data.totalClasses,
+                            totalStudents: analyticsRes.data.data.totalStudents
+                        }
+                    }));
+                }
+
+                if (classesRes.data.success) {
+                    setDashboardData(prev => ({
+                        ...prev,
+                        classes: classesRes.data.data
+                    }));
                 }
             } catch (error) {
-                console.error('Failed to fetch classes', error);
+                console.error('Failed to fetch dashboard data', error);
             } finally {
                 setLoading(false);
             }
         };
-        fetchClasses();
+        fetchDashboardData();
     }, []);
+
+    if (loading) return <div className="p-8 text-center text-gray-500">Loading dashboard...</div>;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Column */}
             <div className="lg:col-span-2 flex flex-col gap-6">
+                {/* Stats Row (Optional, if we want to show numbers) */}
+                {/* 
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                        <p className="text-gray-500 text-sm">Total Classes</p>
+                        <p className="text-2xl font-bold">{dashboardData.stats.totalClasses}</p>
+                    </div>
+                </div> 
+                */}
+
                 {/* Quick Actions */}
                 <div className="bg-white dark:bg-card-dark p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <h2 className="text-[#111318] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] mb-4">Quick Actions</h2>
@@ -101,10 +148,8 @@ const TeacherDashboard = () => {
                 <div className="bg-white dark:bg-card-dark p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <h2 className="text-[#111318] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] mb-4">My Classes</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                        {loading ? (
-                            <p className="text-gray-500">Loading classes...</p>
-                        ) : classes.length > 0 ? (
-                            classes.map((cls) => (
+                        {dashboardData.classes.length > 0 ? (
+                            dashboardData.classes.map((cls) => (
                                 <ClassCard
                                     key={cls._id}
                                     title={cls.name}
@@ -121,8 +166,17 @@ const TeacherDashboard = () => {
                 <div className="bg-white dark:bg-card-dark p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <h2 className="text-[#111318] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] mb-4">Upcoming Exams</h2>
                     <div className="flex flex-col gap-4">
-                        <ExamItem title="Algebra II - Midterm" details="Grade 10 | Oct 25, 2023" />
-                        <ExamItem title="Physics - Unit Test" details="Grade 11 | Nov 2, 2023" />
+                        {dashboardData.upcomingExams.length > 0 ? (
+                            dashboardData.upcomingExams.map((exam) => (
+                                <ExamItem
+                                    key={exam._id}
+                                    title={`${exam.subjectId?.name || 'Subject'} - ${exam.title}`}
+                                    details={`${exam.classId?.name || 'Class'} | ${new Date(exam.date).toLocaleDateString()}`}
+                                />
+                            ))
+                        ) : (
+                            <p className="text-gray-500 text-sm">No upcoming exams scheduled.</p>
+                        )}
                     </div>
                 </div>
             </div>
@@ -131,34 +185,24 @@ const TeacherDashboard = () => {
             <div className="lg:col-span-1 bg-white dark:bg-card-dark p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 h-fit">
                 <h2 className="text-[#111318] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] mb-4">Today's Timetable</h2>
                 <div className="flex flex-col pt-2">
-                    <TimetableItem
-                        type="class"
-                        icon={Sigma}
-                        title="Grade 10 - Algebra II"
-                        time="09:00 AM - 10:30 AM"
-                        room="Room 201"
-                    />
-                    <TimetableItem
-                        type="class"
-                        icon={FlaskConical}
-                        title="Grade 11 - Physics"
-                        time="10:45 AM - 12:15 PM"
-                        room="Lab B"
-                    />
-                    <TimetableItem
-                        type="break"
-                        icon={Utensils}
-                        title="Lunch Break"
-                        time="12:15 PM - 01:00 PM"
-                    />
-                    <TimetableItem
-                        type="class"
-                        icon={Sigma}
-                        title="Grade 10 - Algebra II"
-                        time="01:00 PM - 02:30 PM"
-                        room="Room 201"
-                        isLast={true}
-                    />
+                    {dashboardData.todaysTimetable.length > 0 ? (
+                        dashboardData.todaysTimetable.map((period, index) => (
+                            <TimetableItem
+                                key={period._id}
+                                type="class"
+                                icon={Sigma}
+                                title={`${period.className} - ${period.subject}`}
+                                time={`${period.startTime} - ${period.endTime}`}
+                                room={period.room}
+                                isLast={index === dashboardData.todaysTimetable.length - 1}
+                            />
+                        ))
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-8 text-center text-gray-500">
+                            <Utensils className="w-8 h-8 mb-2 opacity-20" />
+                            <p className="text-sm">No classes scheduled for today.</p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
