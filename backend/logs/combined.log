@@ -158,3 +158,9 @@
 {"level":"warn","message":"Rate limit exceeded for IP: ::1","service":"tuition-management-api","timestamp":"2025-12-14T15:33:44.969Z"}
 {"level":"info","message":"Server running in development mode on port 5000","service":"tuition-management-api","timestamp":"2025-12-14T15:34:42.447Z"}
 {"level":"info","message":"Server running in development mode on port 5000","service":"tuition-management-api","timestamp":"2025-12-14T15:38:02.052Z"}
+{"level":"info","message":"Server running in development mode on port 5000","service":"tuition-management-api","timestamp":"2025-12-14T15:44:11.226Z"}
+{"level":"info","message":"Server running in development mode on port 5000","service":"tuition-management-api","timestamp":"2026-01-19T09:25:59.711Z"}
+{"level":"info","message":"Server running in development mode on port 5000","service":"tuition-management-api","timestamp":"2026-01-19T09:28:39.126Z"}
+{"level":"info","message":"Server running in development mode on port 5000","service":"tuition-management-api","timestamp":"2026-01-19T09:33:15.506Z"}
+{"level":"info","message":"Server running in development mode on port 5000","service":"tuition-management-api","timestamp":"2026-01-19T09:34:31.960Z"}
+{"level":"info","message":"Server running in development mode on port 5000","service":"tuition-management-api","timestamp":"2026-01-19T09:35:29.262Z"}

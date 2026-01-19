@@ -8,6 +8,7 @@ exports.uploadFile = asyncHandler(async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, error: { message: 'No file uploaded' } });
     }
-    const fileUrl = `/uploads/${req.file.filename}`;
+    // Cloudinary storage puts the URL in req.file.path
+    const fileUrl = req.file.path;
     res.status(201).json({ success: true, data: { fileUrl } });
 });

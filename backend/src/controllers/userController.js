@@ -17,7 +17,7 @@ exports.getUsers = async (req, res, next) => {
 exports.createUser = async (req, res, next) => {
     try {
         if (req.file) {
-            req.body.profileImageUrl = `/uploads/${req.file.filename}`;
+            req.body.profileImageUrl = req.file.path;
         }
 
         const user = await User.create(req.body);
